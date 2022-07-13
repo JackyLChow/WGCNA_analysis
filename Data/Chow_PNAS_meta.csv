@@ -1,0 +1,17 @@
+sample,age,sex,path_T_stage,treatment
+P1T,53,M,2A,SBRT
+P6T,53,F,4,SBRT
+P14T,62,M,3A,SBRT
+P15T,57,F,2A,SBRT
+P16T,63,F,3A,SBRT
+Cont-19,60,F,3A,control
+Cont-21,55,F,1B,control
+Cont-32,50,M,2A,control
+Cont-51,74,F,1B,control
+Cont-54,70,F,1A,control
+Cont-70,62,F,1B,control
+Cont-78,51,M,2A,control
+P3T,75,F,3A,SBRT
+P10T,75,F,3A,SBRT
+P13T,60,F,2,SBRT
+CONT-34,71,F,1B,control
