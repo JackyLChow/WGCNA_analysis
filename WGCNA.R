@@ -23,7 +23,7 @@ setwd("~/Documents/bfx_proj/Revisit_RNAseq_2020_Chow_PNAS/")
 
 ### counts data ---
 r_count <- read_csv("Data/Chow_PNAS_rawcounts.csv")
-r_count <- r_count[!duplicated(r_count$gene), ] # remove dupilicate genes
+r_count <- r_count[!duplicated(r_count$gene), ] # remove duplicate genes
 cmtx <- as.matrix(r_count[, -1]) # make numerical matrix
 rownames(cmtx) <- r_count$gene
 
@@ -128,27 +128,41 @@ moduleTraitFDR_w <- matrix(p.adjust(moduleTraitPvalue_w, method = "BH"),
                            nrow = nrow(moduleTraitPvalue_w),
                            ncol = ncol(moduleTraitPvalue_w)) # adjust by FDR
 
-### plot module eigenvalue vs trait
-
-#set.seed(415); Heatmap(moduleTraitCor_w) # simple heatmap
-
-col_fun <- circlize::colorRamp2(c(-1, 0, 1), c("green", "white", "red"))
+### plot module eigenvalue vs trait ---
+col_fun <- circlize::colorRamp2(c(-1, -0.5, 0, 0.5, 1),
+                                c(scico(5, palette = "vanimo")[1], scico(5, palette = "vanimo")[2],
+                                  scico(5, palette = "vanimo")[3],
+                                  scico(5, palette = "vanimo")[4], scico(5, palette = "vanimo")[5]))
 
 Heatmap(moduleTraitCor_w,
         name = "Correlation",
+        col = col_fun,
+        width = unit(ncol(moduleTraitCor_w) * 5, "mm"),
+        height = unit(nrow(moduleTraitCor_w) * 5, "mm"),
         rect_gp = gpar(type = "none"),
         cell_fun = function(j, i, x, y, width, height, fill) {
-          grid.rect(x = x, y = y, width = width, height = height, 
-                    gp = gpar(col = "grey", fill = NA))
-          grid.circle(x = x, y = y, r = abs(-log10(moduleTraitFDR_w)[i, j])/5 * min(unit.c(width, height)), 
-                        gp = gpar(fill = col_fun(moduleTraitCor_w[i, j]), col = NA))
+          grid.rect(x = x, y = y, width = width, height = height, gp = gpar(col = "grey", fill = NA))
+          grid.circle(x = x, y = y, r = abs(-log10(moduleTraitFDR_w)[i, j]/2) * min(unit.c(width, height)), # size is FDR
+                      gp = gpar(fill = col_fun(moduleTraitCor_w[i, j]), col = NA)) # color is correlation
           },
-        cluster_columns = F,
-        show_heatmap_legend = F)
+        cluster_columns = F)
 
-
-
-
+Heatmap(moduleTraitCor_w,
+        name = "Correlation",
+        col = col_fun,
+        width = unit(ncol(moduleTraitCor_w) * 5, "mm"),
+        height = unit(nrow(moduleTraitCor_w) * 5, "mm"),
+        rect_gp = gpar(type = "none"),
+        cell_fun = function(j, i, x, y, width, height, fill) {
+          grid.circle(x = x, y = y, r = abs(-log10(moduleTraitFDR_w)[i, j]/2) * min(unit.c(width, height)), # size is FDR
+                      gp = gpar(fill = col_fun(moduleTraitCor_w[i, j]), col = NA)) # color is correlation
+          if(moduleTraitFDR_w[i, j] > 0.5){ # greyed out does not pass FDR threshold
+            grid.rect(x = x, y = y, width = width, height = height, gp = gpar(col = "grey", fill = "grey30"))
+          } else {
+            grid.rect(x = x, y = y, width = width, height = height, gp = gpar(col = "grey", fill = NA))
+          }
+        },
+        cluster_columns = F)
 
 
 
