@@ -19,7 +19,7 @@ library(clusterProfiler)
 #
 ################################################################################
 
-setwd("~/Documents/bfx_proj/Revisit_RNAseq_2020_Chow_PNAS/")
+setwd("~/Documents/BFX_proj/Revisit_RNAseq_2020_Chow_PNAS/")
 
 ### counts data ---
 r_count <- read_csv("Data/Chow_PNAS_rawcounts.csv")
