@@ -23,13 +23,13 @@ library(clusterProfiler)
 setwd("~/Documents/BFX_proj/WGCNA_analysis")
 
 ### counts data ---
-r_count <- read_csv("Data/raw/Chow_PNAS_rawcounts.csv")
+r_count <- read_csv("data/raw/Chow_PNAS_rawcounts.csv")
 r_count <- r_count[!duplicated(r_count$gene), ] # remove duplicate genes
 c_mtx <- as.matrix(r_count[, -1]) # make numerical matrix
 rownames(c_mtx) <- r_count$gene # assign gene name to row names
 
 ### metadata ---
-meta <- read_csv("Data/raw/Chow_PNAS_meta.csv")
+meta <- read_csv("data/raw/Chow_PNAS_meta.csv")
 
 ### gene synonym reference ---
 hs <- org.Hs.eg.db
@@ -132,9 +132,9 @@ moduleTraitFDR_w <- matrix(p.adjust(moduleTraitPvalue_w, method = "BH"),
 ### clean up ---
 mod_trait <- list(cor = moduleTraitCor_w, pval = moduleTraitPvalue_w, fdr = moduleTraitFDR_w)
 
-saveRDS(tnc_mtx, "Data/derived/tnc_mtx.rds")
-saveRDS(mods, "Data/derived/mods.rds")
-saveRDS(mod_trait, "Data/derived/mod_trait.rds")
+saveRDS(tnc_mtx, "data/derived/tnc_mtx.rds")
+saveRDS(mods, "data/derived/mods.rds")
+saveRDS(mod_trait, "data/derived/mod_trait.rds")
 
 rm(list = ls()[grepl("_w$", ls())])
 
@@ -197,8 +197,8 @@ for(mod_ in unique(mods$colors)){
   rm(list = ls()[grepl("_$", ls())])
 }
 
-saveRDS(mod_genes, "Data/derived/mod_genes.rds")
-saveRDS(mod_gsea, "Data/derived/mod_gsea.rds")
+saveRDS(mod_genes, "data/derived/mod_genes.rds")
+saveRDS(mod_gsea, "data/derived/mod_gsea.rds")
 
 ################################################################################
 #
