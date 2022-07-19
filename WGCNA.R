@@ -198,13 +198,27 @@ for(mod_ in unique(mods$colors)){
 }
 
 saveRDS(mod_genes, "data/derived/mod_genes.rds")
+mod_genes_ <- data.frame(row.names = names(mod_genes),
+                         mod_name = names(mod_genes))
+mod_genes_$mod_genes <- NULL
+for(mod_ in mod_genes_$mod_name){
+  mod_genes_[mod_, "mod_genes"] <- paste(mod_genes[[mod_]], collapse = ", ")
+}
+write.csv(mod_genes_, "data/derived/mod_genes_long.csv")
+rm(mod_genes_)
+
 saveRDS(mod_gsea, "data/derived/mod_gsea.rds")
+write.csv(bind_rows(mod_gsea, .id = "column_label")[1:3, 1:4], "data/derived/mod_gsea_long.csv")
 
 ################################################################################
 #
 # visualize gene module correlation to traits
 #
 ################################################################################
+
+mod_genes <- readRDS("data/derived/mod_genes.rds")
+mod_gsea <- readRDS("data/derived/mod_gsea.rds")
+mod_trait <- readRDS("data/derived/mod_trait.rds")
 
 ### plot module eigenvalue vs trait ---
 # heatmap fill scale
@@ -235,12 +249,13 @@ anno_row <- HeatmapAnnotation(GSEA = anno_text(mod_gsea_short$paths, gp = gpar(f
                               which = "row")
 
 # plot heatmap
-png("figs/heat1.png", height = 600, width = 700, res = 100)
+png("figs/heat1.png", height = 600, width = 800, res = 100)
 Heatmap(mod_trait$cor,
         name = "Correlation",
         col = col_fun,
         right_annotation = anno_row,
-        show_row_names = F,
+        show_row_names = T,
+        row_names_side = "left",
         width = unit(ncol(mod_trait$cor) * 8, "mm"),
         height = unit(nrow(mod_trait$cor) * 8, "mm"),
         rect_gp = gpar(type = "none"),
