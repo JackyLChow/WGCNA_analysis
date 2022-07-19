@@ -208,7 +208,7 @@ write.csv(mod_genes_, "data/derived/mod_genes_long.csv")
 rm(mod_genes_)
 
 saveRDS(mod_gsea, "data/derived/mod_gsea.rds")
-write.csv(bind_rows(mod_gsea, .id = "column_label")[1:3, 1:4], "data/derived/mod_gsea_long.csv")
+write.csv(bind_rows(mod_gsea, .id = "column_label"), "data/derived/mod_gsea_long.csv")
 
 ################################################################################
 #
