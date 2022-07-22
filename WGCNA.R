@@ -1,14 +1,16 @@
-## Revisit Chow et al., PNAS 2020 bulk RNA seq data
+# Generalized WGCNA workflow
+## input: normalized counts data, curated metadata for WGCNA
+## output: image of WGCNA heatmap, table of WGCNA gene modules, table of WGCNA GSEA results
+
 # CRAN
 library(readr)
 library(dplyr)
 library(WGCNA)
-library(spatstat)
 library(scico)
 library(circlize)
+library(matrixStats)
 
 # Bioconductor
-library(DESeq2)
 library(org.Hs.eg.db)
 library(ComplexHeatmap)
 library(ReactomePA)
@@ -16,20 +18,26 @@ library(clusterProfiler)
 
 ################################################################################
 #
-# load parent data
+# data input
 #
 ################################################################################
 
 setwd("~/Documents/BFX_proj/WGCNA_analysis")
 
-### counts data ---
-r_count <- read_csv("data/raw/Chow_PNAS_rawcounts.csv")
-r_count <- r_count[!duplicated(r_count$gene), ] # remove duplicate genes
-c_mtx <- as.matrix(r_count[, -1]) # make numerical matrix
-rownames(c_mtx) <- r_count$gene # assign gene name to row names
+out_tab_dir <- "_output/Chowtput_PNAS_2020/tab/"
+out_rds_dir <- "_output/Chowtput_PNAS_2020/rds/"
+out_fig_dir <- "_output/Chowtput_PNAS_2020/fig/"
+
+### normalized counts data ---
+count <- read_csv("_input/Chow_PNAS_2020/Chow_PNAS_normcounts.csv")
+c_mtx <- as.matrix(count[, 2:ncol(count)])
+rownames(c_mtx) <- count$gene
+
+### trim count matrix for speed, if NULL then no trim ---
+trim_c_mtx <- 5000
 
 ### metadata ---
-meta <- read_csv("data/raw/Chow_PNAS_meta.csv")
+meta <- read_csv("_input/Chow_PNAS_2020/Chow_PNAS_metashort.csv")
 
 ### gene synonym reference ---
 hs <- org.Hs.eg.db
@@ -40,7 +48,7 @@ hs <- AnnotationDbi::select(hs,
 hs <- hs[!duplicated(hs$SYMBOL), ]
 
 # clean up
-rm(r_count)
+rm(count)
 
 ################################################################################
 #
@@ -48,10 +56,7 @@ rm(r_count)
 #
 ################################################################################
 
-### normalize counts in DESeq2 ---
-ds2_ <- DESeqDataSetFromMatrix(countData = c_mtx, colData = meta, design = ~ 1)
-ds2_ <- DESeq(ds2_) # run DESeq2
-tnc_mtx <- t(counts(ds2_, normalized = T)) # extract normalized counts, transpose for WGCNA
+tnc_mtx <- t(c_mtx) # transpose counts for WGCNA
 
 ### WGCNA qc for genes and samples ---
 gsg_w <- goodSamplesGenes(tnc_mtx)
@@ -64,23 +69,19 @@ if (!gsg_w$allOK){
   tnc_mtx <- tnc_mtx[gsg_w$goodSamples, gsg_w$goodGenes]
 }
 
-### shorten and dummify metadata
-meta_w <- meta[, c("age", "sex", "path_T_stage", "treatment")]
-meta_w <- data.frame(meta_w[, "age"],
-                     dummify(meta_w$sex),
-                     dummify(meta_w$treatment))
-
 # clean up
-rm(ds2_, gsg_w)
+rm(gsg_w)
 
 ################################################################################
 #
-# run modified WGCNA
+# run gently modified WGCNA workflow
 #
 ################################################################################
 
 ### filter top variant genes for speed ---
-tnc_mtx <- tnc_mtx[, order(colVars(as.matrix(tnc_mtx)), decreasing = T)[1:5000]]
+if(is.numeric(trim_c_mtx)){
+  tnc_mtx <- tnc_mtx[, order(colVars(as.matrix(tnc_mtx)), decreasing = T)[1:trim_c_mtx]]
+}
 
 ### dendrogram of samples ---
 #sampleTree <- hclust(dist(tnc_mtx), method = "average")
@@ -123,18 +124,30 @@ mods <- mergeCloseModules(tnc_mtx, labels2colors(mods), cutHeight = 0.1) # merge
 ### correlate final modules to traits ---
 MEs_w <- moduleEigengenes(tnc_mtx, mods$colors)$eigengenes # re-calculate eigengenes with merged ME colors
 MEs_w <- orderMEs(MEs_w) # cluster MEs by similarity; put grey (unassigned) at end
-moduleTraitCor_w <- cor(MEs_w, meta_w, use = "p") # correlation of sample eigenvalue vs sample meta value; pairwiase complete observations
+moduleTraitCor_w <- cor(MEs_w, meta, use = "p") # correlation of sample eigenvalue vs sample meta value; pairwiase complete observations
 moduleTraitPvalue_w <- corPvalueStudent(moduleTraitCor_w, nrow(tnc_mtx)) # calculate P value of correlations
 moduleTraitFDR_w <- matrix(p.adjust(moduleTraitPvalue_w, method = "BH"),
                            nrow = nrow(moduleTraitPvalue_w),
                            ncol = ncol(moduleTraitPvalue_w)) # adjust by FDR
 
+### correlate genes to final modules ---
+geneModuleMembership_w <- cor(tnc_mtx, MEs_w, use = "p")
+MMPvalue_w <- corPvalueStudent(as.matrix(geneModuleMembership_w), nrow(tnc_mtx))
+MMPFDR_w <- matrix(p.adjust(MMPvalue_w, method = "BH"),
+                   nrow = nrow(geneModuleMembership_w),
+                   ncol = ncol(geneModuleMembership_w)) # adjust by FDR
+
+#geneTraitSignificance_w <- as.data.frame(cor(tnc_mtx, weight, use = "p"))
+#GSPvalue_w <- as.data.frame(corPvalueStudent(as.matrix(geneTraitSignificance_w), nrow(tnc_mtx)))
+
 ### clean up ---
 mod_trait <- list(cor = moduleTraitCor_w, pval = moduleTraitPvalue_w, fdr = moduleTraitFDR_w)
+gene_mod <- list(gMM = geneModuleMembership_w, pval = MMPvalue_w, fdr = MMPFDR_w)
 
-saveRDS(tnc_mtx, "data/derived/tnc_mtx.rds")
-saveRDS(mods, "data/derived/mods.rds")
-saveRDS(mod_trait, "data/derived/mod_trait.rds")
+#saveRDS(tnc_mtx, paste0(out_rds_dir, "tnc_mtx.rds"))
+#saveRDS(mods, paste0(out_rds_dir, "mods.rds"))
+#saveRDS(mod_trait, paste0(out_rds_dir, "mod_trait.rds"))
+#saveRDS(gene_mod, paste0(out_rds_dir, "gene_mod.rds"))
 
 rm(list = ls()[grepl("_w$", ls())])
 
@@ -196,19 +209,20 @@ for(mod_ in unique(mods$colors)){
   
   rm(list = ls()[grepl("_$", ls())])
 }
+#saveRDS(mod_genes, paste0(out_rds_dir, "mod_genes.rds"))
+#saveRDS(mod_gsea, paste0(out_rds_dir, "mod_gsea.rds"))
 
-saveRDS(mod_genes, "data/derived/mod_genes.rds")
+### export genes and gsea as csv ---
 mod_genes_ <- data.frame(row.names = names(mod_genes),
                          mod_name = names(mod_genes))
 mod_genes_$mod_genes <- NULL
 for(mod_ in mod_genes_$mod_name){
   mod_genes_[mod_, "mod_genes"] <- paste(mod_genes[[mod_]], collapse = ", ")
 }
-write.csv(mod_genes_, "data/derived/mod_genes_long.csv")
-rm(mod_genes_)
+#write.csv(mod_genes_, paste0(out_tab_dir, "mod_genes_long.csv"))
+#write.csv(bind_rows(mod_gsea, .id = "column_label"), paste0(out_tab_dir, "mod_gsea_long.csv"))
 
-saveRDS(mod_gsea, "data/derived/mod_gsea.rds")
-write.csv(bind_rows(mod_gsea, .id = "column_label"), "data/derived/mod_gsea_long.csv")
+rm(mod_genes_) # clean up
 
 ################################################################################
 #
@@ -216,20 +230,23 @@ write.csv(bind_rows(mod_gsea, .id = "column_label"), "data/derived/mod_gsea_long
 #
 ################################################################################
 
-mod_genes <- readRDS("data/derived/mod_genes.rds")
-mod_gsea <- readRDS("data/derived/mod_gsea.rds")
-mod_trait <- readRDS("data/derived/mod_trait.rds")
+### load necessary rds files ---
+mod_genes <- readRDS(paste0(out_rds_dir, "mod_genes.rds"))
+mod_gsea <- readRDS(paste0(out_rds_dir, "mod_gsea.rds"))
+mod_trait <- readRDS(paste0(out_rds_dir, "mod_trait.rds"))
+gene_mod <- readRDS(paste0(out_rds_dir, "gene_mod.rds"))
 
-### plot module eigenvalue vs trait ---
+### heatmap parameters ---
 # heatmap fill scale
 col_fun <- circlize::colorRamp2(c(-1, -0.5, 0, 0.5, 1),
                                 c(scico(5, palette = "vanimo")[1], scico(5, palette = "vanimo")[2],
                                   scico(5, palette = "vanimo")[3],
                                   scico(5, palette = "vanimo")[4], scico(5, palette = "vanimo")[5]))
 
-# heatmap module name to GSEA
-mod_gsea_short <- data.frame(row.names = names(mod_gsea), mod = names(mod_gsea))
-mod_gsea_short$paths <- NULL
+# heatmap module annotation with shortened GSEA and gene lists
+mod_gene_dat_short <- data.frame(row.names = names(mod_gsea), mod = names(mod_gsea))
+mod_gene_dat_short$paths <- NULL
+mod_gene_dat_short$genes <- NULL
 
 for(mod_ in names(mod_gsea)){
   if(nrow(mod_gsea[[mod_]]) > 0){
@@ -238,41 +255,71 @@ for(mod_ in names(mod_gsea)){
     gsea_ <- gsea_[order(gsea_$pvalue), ]
     
     paths_ <- paste0(gsea_$s_d[1], "\n", gsea_$s_d[2])
-    mod_gsea_short[mod_, "paths"] <- paths_
+    mod_gene_dat_short[mod_, "paths"] <- paths_
   }
+  
+  gene_ <- gene_mod$gMM[mod_genes[[mod_]], mod_] # trim module membership table to genes assigned to module
+  gene_ <- gene_[order(gene_)] # order by membership
+  gene_ <- paste0("pos: ", paste(names(head(gene_, 5)), collapse = ", "), "\n",
+                  "neg: ", paste(names(tail(gene_, 5)), collapse = ", "))
+  mod_gene_dat_short[mod_, "genes"] <- gene_
 }
 
-mod_gsea_short <- mod_gsea_short[rownames(mod_trait$cor), ]
+mod_gene_dat_short <- mod_gene_dat_short[rownames(mod_trait$cor), ] # rearrange to match correlation matrix
 
-# heatmap row annotation
-anno_row <- HeatmapAnnotation(GSEA = anno_text(mod_gsea_short$paths, gp = gpar(fontsize = 10)),
+### plot module eigenvalue vs trait ---
+# plot heatmap1; correlation only
+anno_row <- HeatmapAnnotation(ME = rownames(mod_trait$cor),
+                              col = list(ME = setNames(str_remove(rownames(mod_trait$cor), "ME"), rownames(mod_trait$cor))),
+                              which = "row",
+                              show_legend = F)
+
+png(paste0(out_fig_dir, "heat1.png"), height = nrow(mod_trait$cor) * 37.5, width = ncol(mod_trait$cor) * 37.5 + 300, res = 100)
+set.seed(415); Heatmap(mod_trait$cor,
+                       name = "Correlation",
+                       col = col_fun,
+                       right_annotation = anno_row,
+                       show_row_names = T,
+                       row_names_side = "right",
+                       width = unit(ncol(mod_trait$cor) * 8, "mm"),
+                       height = unit(nrow(mod_trait$cor) * 8, "mm"),
+                       cluster_columns = F)
+dev.off()
+
+# plot heatmap2; correlation, significance, top 2 GSEA
+anno_row <- HeatmapAnnotation(GSEA = anno_text(mod_gene_dat_short$paths, gp = gpar(fontsize = 10)),
                               which = "row")
 
-# plot heatmap
-png("figs/heat1.png", height = 600, width = 800, res = 100)
-Heatmap(mod_trait$cor,
+png(paste0(out_fig_dir, "heat2.png"), height = nrow(mod_trait$cor) * 37.5, width = ncol(mod_trait$cor) * 37.5 + 500, res = 100)
+set.seed(415); Heatmap(mod_trait$cor,
         name = "Correlation",
         col = col_fun,
         right_annotation = anno_row,
-        show_row_names = T,
-        row_names_side = "left",
+        show_row_names = F,
+        show_row_dend = F,
+        row_names_side = "right",
         width = unit(ncol(mod_trait$cor) * 8, "mm"),
         height = unit(nrow(mod_trait$cor) * 8, "mm"),
         rect_gp = gpar(type = "none"),
         cell_fun = function(j, i, x, y, width, height, fill) {
           grid.rect(x = x, y = y, width = width, height = height, gp = gpar(col = "grey", fill = NA))
-          grid.circle(x = x, y = y, r = abs(-log10(mod_trait$fdr)[i, j]/1.5) * min(unit.c(width, height)), # size is FDR
+          grid.circle(x = x, y = y, r = abs(-log10(mod_trait$fdr)[i, j]/max(-log10(mod_trait$fdr))) * min(unit.c(width, height) * 1.5), # size is FDR
                       gp = gpar(fill = col_fun(mod_trait$cor[i, j]), col = NA)) # color is correlation
           },
         cluster_columns = F)
 dev.off()
 
-png("figs/heat2.png", height = 600, width = 700, res = 100)
+# plot heatmap3; correlation, significance, top 5 positive and negative correlated genes for each module
+anno_row <- HeatmapAnnotation(GSEA = anno_text(mod_gene_dat_short$genes, gp = gpar(fontsize = 10)),
+                              which = "row")
+
+png(paste0(out_fig_dir, "heat3.png"), height = nrow(mod_trait$cor) * 37.5, width = ncol(mod_trait$cor) * 37.5 + 500, res = 100)
 Heatmap(mod_trait$cor,
         name = "Correlation",
         col = col_fun,
         right_annotation = anno_row,
         show_row_names = F,
+        show_row_dend = F,
         width = unit(ncol(mod_trait$cor) * 8, "mm"),
         height = unit(nrow(mod_trait$cor) * 8, "mm"),
         rect_gp = gpar(type = "none"),
