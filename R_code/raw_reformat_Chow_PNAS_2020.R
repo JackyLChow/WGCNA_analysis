@@ -22,9 +22,10 @@ n_count <- data.frame(gene = rownames(n_count), n_count)
 write.csv(n_count, "~/Documents/BFX_proj/WGCNA_analysis/_input/Chow_PNAS_2020/Chow_PNAS_normcounts.csv", row.names = F)
 
 ### dummify metadata for WGCNA ---
-meta <- meta[, c("age", "sex", "path_T_stage", "treatment")] # traits of interest
-meta <- data.frame(meta[, "age"],
-                     dummify(meta$sex),
-                     dummify(meta$treatment))
+meta <- meta[, c("sample", "age", "sex", "path_T_stage", "treatment")] # traits of interest
+meta <- data.frame(meta[, c("sample", "age")],
+                   dummify(meta$sex),
+                   dummify(meta$treatment))
+                     
 
 write.csv(meta, "~/Documents/BFX_proj/WGCNA_analysis/_input/Chow_PNAS_2020/Chow_PNAS_metashort.csv", row.names = F)

@@ -1,4 +1,7 @@
-# Generalized WGCNA workflow
+# Tailored WGCNA workflow for IMmotion analysis
+## changed module merge cut height to 0.4; may need to set a target to full automate for pilot analysis
+## radius for heatmap dots still needs work; omg, just set the radius to be half the height of the box
+
 ## input: normalized counts data, curated metadata for WGCNA
 ## output: images of WGCNA heatmaps, table of WGCNA gene modules, table of WGCNA GSEA results
 
@@ -25,9 +28,9 @@ library(clusterProfiler)
 
 setwd("~/Documents/BFX_proj/WGCNA_analysis")
 
-out_tab_dir <- "_output/Chowtput_PNAS_2020/tab/"
-out_rds_dir <- "_output/Chowtput_PNAS_2020/rds/"
-out_fig_dir <- "_output/Chowtput_PNAS_2020/fig/"
+out_tab_dir <- "_output/Imm151/tab/"
+out_rds_dir <- "~/Documents/BFX_proj/_x_x_data/immotion/derived/rds/"
+out_fig_dir <- "_output/Imm151/fig/"
 
 ################################################################################
 #
@@ -35,21 +38,18 @@ out_fig_dir <- "_output/Chowtput_PNAS_2020/fig/"
 #
 ################################################################################
 
-### c_mtx: normalized counts data---
-count <- read_csv("_input/Chow_PNAS_2020/Chow_PNAS_normcounts.csv")
+### normalized counts data ---
+count <- read_csv("~/Documents/BFX_proj/_x_x_data/immotion/raw/counts.csv")
 c_mtx <- as.matrix(count[, 2:ncol(count)])
 rownames(c_mtx) <- count$gene
 
 ### trim count matrix for speed, if NULL then no trim ---
-trim_c_mtx <- 5000
+trim_c_mtx <- NULL
 
-### meta: metadata, ---
-meta <- data.frame(read_csv("_input/Chow_PNAS_2020/Chow_PNAS_metashort.csv"))
-rownames(meta) <- str_replace(meta$sample, "-", ".")
+### metadata ---
+meta <- data.frame(read_csv("~/Documents/BFX_proj/_x_x_data/immotion/derived/immotion_metashort.csv"))
+rownames(meta) <- meta$RNASEQ_SAMPLE_ID
 meta <- meta[, 2:ncol(meta)]
-
-### ensure metadata match ---
-meta <- meta[colnames(c_mtx), ]
 
 ### gene synonym reference ---
 hs <- org.Hs.eg.db
@@ -125,7 +125,7 @@ mods <- cutreeDynamic(geneTree_w, # clustering
 #abline(h = 0.1, col = "red") # dissimilarity threshold e.g. (0.25 is similarity of 0.75)
 
 ### merge similar modules ---
-mods <- mergeCloseModules(tnc_mtx, labels2colors(mods), cutHeight = 0.1) # merge similar modules
+mods <- mergeCloseModules(tnc_mtx, labels2colors(mods), cutHeight = 0.4) # merge similar modules
 
 #plotDendroAndColors(geneTree_w, cbind(labels2colors(mods_w), mods_w$colors),
 #                   c("Initial modules", "Merged modules"),
@@ -233,7 +233,6 @@ mod_genes_ <- data.frame(row.names = names(mod_genes),
 mod_genes_$mod_genes <- NULL
 for(mod_ in mod_genes_$mod_name){
   mod_genes_[mod_, "mod_genes"] <- paste(mod_genes[[mod_]], collapse = ", ")
-  rm(mod_) # clean up
 }
 write.csv(mod_genes_, paste0(out_tab_dir, "mod_genes_long.csv"))
 write.csv(bind_rows(mod_gsea, .id = "column_label"), paste0(out_tab_dir, "mod_gsea_long.csv"))
@@ -281,8 +280,6 @@ for(mod_ in names(mod_gsea)){
   gene_ <- paste0("pos: ", paste(names(head(gene_, 5)), collapse = ", "), "\n",
                   "neg: ", paste(names(tail(gene_, 5)), collapse = ", "))
   mod_gene_dat_short[mod_, "genes"] <- gene_
-  
-  rm(mod_, gene_)
 }
 
 mod_gene_dat_short <- mod_gene_dat_short[rownames(mod_trait$cor), ] # rearrange to match correlation matrix
@@ -344,7 +341,7 @@ Heatmap(mod_trait$cor,
         height = unit(nrow(mod_trait$cor) * 8, "mm"),
         rect_gp = gpar(type = "none"),
         cell_fun = function(j, i, x, y, width, height, fill) {
-          grid.circle(x = x, y = y, r = abs(-log10(mod_trait$fdr)[i, j]/max(-log10(mod_trait$fdr/max(mod_trait$fdr)))) * unit(4, "mm"), # size is FDR
+          grid.circle(x = x, y = y, r = abs(-log10(mod_trait$fdr)[i, j]/max(-log10(mod_trait$fdr/max(mod_trait$fdr)))) * min(unit.c(width, height) * 0.9), # size is FDR
                       gp = gpar(fill = col_fun(mod_trait$cor[i, j]), col = NA)) # color is correlation
           if(mod_trait$fdr[i, j] > 0.5){ # greyed out does not pass FDR threshold
             grid.rect(x = x, y = y, width = width, height = height, gp = gpar(col = "grey", fill = scico(3, palette = "vanimo")[2]))
