@@ -67,7 +67,10 @@ pt_df <- data.frame(meta,
                     PC1 = pca$x[, 1],
                     PC2 = pca$x[, 2])
 
-ggplot(pt_df, aes(PC1, PC2, color = factor(SBRT))) + geom_point()
+ggplot(pt_df, aes(PC1, PC2, color = factor(SBRT))) +
+  geom_point() +
+  geom_hline(yintercept = median(pt_df[pt_df$SBRT == 0, "PC2"]), color = "red") +
+  geom_hline(yintercept = median(pt_df[pt_df$SBRT == 1, "PC2"]), color = "blue")
 
 eig <- pca$rotation
 eig_PC2 <- eig[, "PC2"]
